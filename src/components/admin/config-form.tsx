@@ -16,7 +16,11 @@ export function ConfigForm({ config }: { config: FacilityConfig }) {
     rotation_interval_days: config.rotation_interval_days,
     labor_rate: config.labor_rate,
     total_cycles: config.total_cycles,
-    room_sequence: config.room_sequence,
+    room_sequence: config.room_sequence.map((r) => ({
+      room: r.room,
+      plants: r.plants ?? 0,
+      lights: r.lights ?? 0,
+    })),
   });
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
