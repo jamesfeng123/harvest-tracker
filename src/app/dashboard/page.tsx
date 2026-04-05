@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { HarvestTable } from "@/components/dashboard/harvest-table";
-import { Profile } from "@/lib/types";
+import { Profile, FacilityConfig } from "@/lib/types";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -11,13 +11,14 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  const [{ data: profile }, { data: config }] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", user.id).single(),
+    supabase.from("facility_config").select("*").limit(1).single(),
+  ]);
 
   if (!profile) redirect("/login");
+
+  const facilityConfig = config as FacilityConfig | null;
 
   return (
     <div>
@@ -28,7 +29,11 @@ export default async function DashboardPage() {
           Real-time updates enabled
         </div>
       </div>
-      <HarvestTable profile={profile as Profile} />
+      <HarvestTable
+        profile={profile as Profile}
+        laborRate={facilityConfig?.labor_rate ?? 0}
+        roomSequence={facilityConfig?.room_sequence ?? []}
+      />
     </div>
   );
 }
