@@ -102,7 +102,7 @@ export function ConfigForm({ config }: { config: FacilityConfig }) {
         records.push({
           cycle_number: cycle,
           room_number: rooms[roomIdx].room,
-          trim_start_date: trimStart.toISOString().split("T")[0],
+          trim_start_date: null,
           trim_end_date: null,
           labor_units: 0,
           yield_lbs: 0,

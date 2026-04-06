@@ -35,7 +35,7 @@ export function Navbar({ profile }: { profile: Profile }) {
             {profile.role === "admin" && (
               <Link
                 href="/admin/config"
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
               >
                 Config
               </Link>
@@ -50,14 +50,14 @@ export function Navbar({ profile }: { profile: Profile }) {
             </span>
             <button
               onClick={handleSignOut}
-              className="text-sm text-gray-600 hover:text-red-600"
+              className="text-sm text-gray-600 hover:text-red-600 transition-colors"
             >
               Sign out
             </button>
           </div>
         </div>
         {/* Tab Bar */}
-        <div className="flex gap-1 -mb-px">
+        <div className="flex gap-1 -mb-px mt-1">
           {TABS.map((tab) => {
             const isActive =
               tab.href === "/dashboard"
@@ -70,7 +70,7 @@ export function Navbar({ profile }: { profile: Profile }) {
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   isActive
                     ? "border-green-600 text-green-700"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
                 }`}
               >
                 {tab.label}

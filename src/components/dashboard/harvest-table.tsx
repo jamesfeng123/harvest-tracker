@@ -314,14 +314,14 @@ export function HarvestTable({
   }) {
     if (status === "completed") {
       return (
-        <span className="px-1.5 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded">
+        <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
           Done
         </span>
       );
     }
     if (record.dry_room_id === "TRIM") {
       return (
-        <span className="px-1.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded">
+        <span className="px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded-full">
           Trim Room
         </span>
       );
@@ -332,13 +332,13 @@ export function HarvestTable({
       record.dry_room_id === "C"
     ) {
       return (
-        <span className="px-1.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800 rounded">
+        <span className="px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800 rounded-full">
           Dry Room {record.dry_room_id}
         </span>
       );
     }
     return (
-      <span className="px-1.5 py-0.5 text-xs font-semibold bg-gray-100 text-gray-500 rounded">
+      <span className="px-2 py-0.5 text-xs font-semibold bg-gray-100 text-gray-500 rounded-full">
         Scheduled
       </span>
     );
@@ -370,25 +370,25 @@ export function HarvestTable({
       {/* KPI Summary Cards */}
       {kpi.count > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Total Yield</p>
-            <p className="text-2xl font-bold text-gray-900">
+          <div className="bg-white rounded-xl shadow-sm border-l-4 border-l-green-500 p-5">
+            <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Yield</p>
+            <p className="text-3xl font-bold text-gray-900">
               {kpi.totalYield.toLocaleString("en-US", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}{" "}
-              lbs
+              <span className="text-base font-medium text-gray-500">lbs</span>
             </p>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Total Labor Cost</p>
-            <p className="text-2xl font-bold text-gray-900">
+          <div className="bg-white rounded-xl shadow-sm border-l-4 border-l-green-500 p-5">
+            <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Total Labor Cost</p>
+            <p className="text-3xl font-bold text-gray-900">
               {formatCurrency(kpi.totalLaborCost)}
             </p>
           </div>
-          <div className="bg-white rounded-lg shadow p-4">
-            <p className="text-sm text-gray-500">Average Cost/lb</p>
-            <p className="text-2xl font-bold text-gray-900">
+          <div className="bg-white rounded-xl shadow-sm border-l-4 border-l-green-500 p-5">
+            <p className="text-xs uppercase tracking-wide text-gray-500 mb-1">Average Cost/lb</p>
+            <p className="text-3xl font-bold text-gray-900">
               {formatCurrencyDecimal(kpi.avgCostPerLb)}
             </p>
           </div>
@@ -423,26 +423,26 @@ export function HarvestTable({
       </div>
 
       {/* Flat Harvest Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                <th className="px-3 py-2">Cycle</th>
-                <th className="px-3 py-2">Seq</th>
-                <th className="px-3 py-2">Room</th>
-                <th className="px-3 py-2">Plants</th>
-                <th className="px-3 py-2">Lights</th>
-                <th className="px-3 py-2">Harvest Date</th>
-                <th className="px-3 py-2">Location</th>
-                <th className="px-3 py-2">Trim Start</th>
-                <th className="px-3 py-2">Trim End</th>
-                <th className="px-3 py-2">Labor</th>
-                <th className="px-3 py-2">Yield (lbs)</th>
-                <th className="px-3 py-2">Labor Cost</th>
-                <th className="px-3 py-2">Cost/lb</th>
-                <th className="px-3 py-2">Yield/Light</th>
-                <th className="px-3 py-2">Yield/Plant</th>
+              <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-2.5">Cycle</th>
+                <th className="px-3 py-2.5">Seq</th>
+                <th className="px-3 py-2.5">Room</th>
+                <th className="px-3 py-2.5">Plants</th>
+                <th className="px-3 py-2.5">Lights</th>
+                <th className="px-3 py-2.5">Harvest Date</th>
+                <th className="px-3 py-2.5">Location</th>
+                <th className="px-3 py-2.5">Trim Start</th>
+                <th className="px-3 py-2.5">Trim End</th>
+                <th className="px-3 py-2.5">Labor</th>
+                <th className="px-3 py-2.5">Yield (lbs)</th>
+                <th className="px-3 py-2.5">Labor Cost</th>
+                <th className="px-3 py-2.5">Cost/lb</th>
+                <th className="px-3 py-2.5">Yield/Light</th>
+                <th className="px-3 py-2.5">Yield/Plant</th>
               </tr>
             </thead>
             <tbody>
@@ -456,11 +456,11 @@ export function HarvestTable({
                     onClick={() =>
                       router.push(`/dashboard/record/${r.id}`)
                     }
-                    className={`border-b border-gray-100 hover:brightness-95 transition-colors cursor-pointer ${ROW_BG[row.rowStatus]} ${
+                    className={`border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${ROW_BG[row.rowStatus]} ${
                       isUpdated ? "ring-2 ring-yellow-300 ring-inset" : ""
                     }`}
                   >
-                    <td className="px-3 py-2 font-medium text-gray-900">
+                    <td className="px-3 py-2.5 font-medium text-gray-900">
                       {r.cycle_number}
                       {isUpdated && (
                         <span
@@ -469,53 +469,53 @@ export function HarvestTable({
                         />
                       )}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">{row.seq}</td>
-                    <td className="px-3 py-2 font-semibold text-gray-900">
+                    <td className="px-3 py-2.5 text-gray-600">{row.seq}</td>
+                    <td className="px-3 py-2.5 font-semibold text-gray-900">
                       {r.room_number}
                     </td>
-                    <td className="px-3 py-2 text-gray-500">
+                    <td className="px-3 py-2.5 text-gray-500">
                       {row.plants}
                     </td>
-                    <td className="px-3 py-2 text-gray-500">
+                    <td className="px-3 py-2.5 text-gray-500">
                       {row.lights}
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
+                    <td className="px-3 py-2.5 text-gray-700">
                       {fmtDate(row.harvestDate)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5">
                       <LocationBadge
                         record={r}
                         status={row.rowStatus}
                       />
                     </td>
-                    <td className="px-3 py-2 text-gray-600">
+                    <td className="px-3 py-2.5 text-gray-600">
                       {fmtDate(r.trim_start_date)}
                     </td>
-                    <td className="px-3 py-2 text-gray-600">
+                    <td className="px-3 py-2.5 text-gray-600">
                       {fmtDate(r.trim_end_date)}
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
+                    <td className="px-3 py-2.5 text-gray-700">
                       {r.labor_units > 0 ? r.labor_units : "—"}
                     </td>
-                    <td className="px-3 py-2 font-medium text-gray-900">
+                    <td className="px-3 py-2.5 font-medium text-gray-900">
                       {r.yield_lbs > 0 ? r.yield_lbs : "—"}
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
+                    <td className="px-3 py-2.5 font-medium text-gray-700">
                       {row.laborCost > 0
                         ? formatCurrency(row.laborCost)
                         : "—"}
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
+                    <td className="px-3 py-2.5 text-gray-700">
                       {row.costPerLb != null
                         ? formatCurrencyDecimal(row.costPerLb)
                         : "—"}
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
+                    <td className="px-3 py-2.5 text-gray-700">
                       {row.yieldPerLight != null
                         ? row.yieldPerLight.toFixed(2)
                         : "—"}
                     </td>
-                    <td className="px-3 py-2 text-gray-700">
+                    <td className="px-3 py-2.5 text-gray-700">
                       {row.yieldPerPlant != null
                         ? row.yieldPerPlant.toFixed(4)
                         : "—"}
@@ -529,7 +529,7 @@ export function HarvestTable({
       </div>
 
       {/* Legend */}
-      <div className="flex gap-4 text-xs text-gray-500">
+      <div className="flex gap-6 text-xs text-gray-500">
         <span className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded bg-green-100 border border-green-300" />{" "}
           Completed
