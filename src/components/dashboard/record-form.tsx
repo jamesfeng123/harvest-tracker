@@ -36,7 +36,7 @@ export function RecordForm({ record, laborRate, plants, lights }: RecordFormProp
     return { laborCost, costPerLb, yieldPerLight, yieldPerPlant };
   }, [formData.labor_units, formData.yield_lbs, laborRate, lights, plants]);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -156,14 +156,18 @@ export function RecordForm({ record, laborRate, plants, lights }: RecordFormProp
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Dry Room ID
           </label>
-          <input
-            type="text"
+          <select
             name="dry_room_id"
             value={formData.dry_room_id}
             onChange={handleChange}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            placeholder="e.g. DR-1"
-          />
+          >
+            <option value="">— None —</option>
+            <option value="A">Dry Room A</option>
+            <option value="B">Dry Room B</option>
+            <option value="C">Dry Room C</option>
+            <option value="TRIM">Trim Room</option>
+          </select>
         </div>
 
         <div className="flex gap-3 pt-2">
