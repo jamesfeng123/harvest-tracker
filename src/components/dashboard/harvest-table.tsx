@@ -47,6 +47,14 @@ export function HarvestTable({ profile, laborRate, roomSequence }: HarvestTableP
     return map;
   }, [roomSequence]);
 
+  const roomOrder = useMemo(() => {
+    const order: Record<string, number> = {};
+    roomSequence.forEach((r, i) => {
+      order[r.room] = i;
+    });
+    return order;
+  }, [roomSequence]);
+
   const fetchRecords = useCallback(async () => {
     const { data } = await supabase
       .from("harvest_records")
@@ -192,7 +200,10 @@ export function HarvestTable({ profile, laborRate, roomSequence }: HarvestTableP
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {cycleRecords.map((record) => {
+                  {cycleRecords
+                  .slice()
+                  .sort((a, b) => (roomOrder[a.room_number] ?? Infinity) - (roomOrder[b.room_number] ?? Infinity))
+                  .map((record) => {
                     const stage = computeStage(
                       record.trim_start_date,
                       record.trim_end_date
