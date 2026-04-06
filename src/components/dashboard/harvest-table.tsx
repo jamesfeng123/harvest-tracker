@@ -1,49 +1,109 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { HarvestRecord, Profile, RoomConfig } from "@/lib/types";
-import { computeStage, daysDrying } from "@/lib/constants";
+import { HarvestRecord, RoomConfig } from "@/lib/types";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
-const STAGE_COLORS: Record<string, string> = {
-  upcoming: "bg-blue-100 text-blue-800",
-  "in-progress": "bg-yellow-100 text-yellow-800",
-  completed: "bg-green-100 text-green-800",
-};
+// ─── Helpers ───
 
-const ROW_BG: Record<string, string> = {
-  upcoming: "bg-gray-50",
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+function fmtDate(d: string | null): string {
+  if (!d) return "—";
+  return new Date(d + "T00:00:00").toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatCurrency(value: number): string {
+  return (
+    "$" +
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })
+  );
+}
+
+function formatCurrencyDecimal(value: number): string {
+  return (
+    "$" +
+    value.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  );
+}
+
+type RowStatus = "completed" | "in-progress" | "upcoming";
+
+function getRowStatus(r: HarvestRecord, dryRoom: string | null): RowStatus {
+  if (r.trim_start_date && r.trim_end_date && r.labor_units > 0 && r.yield_lbs > 0) {
+    return "completed";
+  }
+  if (r.trim_start_date || r.trim_end_date || r.labor_units > 0 || r.yield_lbs > 0 || dryRoom) {
+    return "in-progress";
+  }
+  return "upcoming";
+}
+
+const ROW_BG: Record<RowStatus, string> = {
+  upcoming: "",
   "in-progress": "bg-yellow-50",
   completed: "bg-green-50",
 };
 
-function formatCurrency(value: number): string {
-  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-}
+// ─── Types ───
 
-function formatCurrencyDecimal(value: number): string {
-  return "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+interface EnrichedRow {
+  record: HarvestRecord;
+  seq: number;
+  harvestDate: string;
+  plants: number;
+  lights: number;
+  rowStatus: RowStatus;
+  laborCost: number;
+  costPerLb: number | null;
+  yieldPerLight: number | null;
+  yieldPerPlant: number | null;
 }
 
 interface HarvestTableProps {
-  profile: Profile;
   laborRate: number;
   roomSequence: RoomConfig[];
+  facilityConfig: {
+    rotationStartDate: string;
+    rotationInterval: number;
+    totalCycles: number;
+  };
 }
 
-export function HarvestTable({ profile, laborRate, roomSequence }: HarvestTableProps) {
+// ─── Component ───
+
+export function HarvestTable({
+  laborRate,
+  roomSequence,
+  facilityConfig,
+}: HarvestTableProps) {
+  const router = useRouter();
   const [records, setRecords] = useState<HarvestRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(new Set());
+  const [recentlyUpdated, setRecentlyUpdated] = useState<Set<string>>(
+    new Set()
+  );
   const supabase = createClient();
 
   const roomMap = useMemo(() => {
     const map: Record<string, RoomConfig> = {};
-    for (const r of roomSequence) {
-      map[r.room] = r;
-    }
+    for (const r of roomSequence) map[r.room] = r;
     return map;
   }, [roomSequence]);
 
@@ -74,11 +134,7 @@ export function HarvestTable({ profile, laborRate, roomSequence }: HarvestTableP
       .channel("harvest-realtime")
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "harvest_records",
-        },
+        { event: "*", schema: "public", table: "harvest_records" },
         (payload: RealtimePostgresChangesPayload<HarvestRecord>) => {
           if (payload.eventType === "INSERT") {
             setRecords((prev) => [...prev, payload.new as HarvestRecord]);
@@ -102,24 +158,193 @@ export function HarvestTable({ profile, laborRate, roomSequence }: HarvestTableP
         }
       )
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
   }, [supabase]);
 
+  // ─── Enrich rows ───
+  const enrichedRows: EnrichedRow[] = useMemo(() => {
+    return records.map((record) => {
+      const seqIndex = roomOrder[record.room_number] ?? 0;
+      const seq = seqIndex + 1;
+      const dayOffset =
+        ((record.cycle_number - 1) * roomSequence.length + seqIndex) *
+        facilityConfig.rotationInterval;
+      const harvestDate = addDays(
+        facilityConfig.rotationStartDate,
+        dayOffset
+      );
+      const room = roomMap[record.room_number];
+      const plants = room?.plants ?? 0;
+      const lights = room?.lights ?? 0;
+      const rowStatus = getRowStatus(record, record.dry_room_id);
+      const laborCost = record.labor_units * laborRate;
+      const costPerLb =
+        record.yield_lbs > 0 ? laborCost / record.yield_lbs : null;
+      const yieldPerLight =
+        lights > 0 && record.yield_lbs > 0
+          ? record.yield_lbs / lights
+          : null;
+      const yieldPerPlant =
+        plants > 0 && record.yield_lbs > 0
+          ? record.yield_lbs / plants
+          : null;
+
+      return {
+        record,
+        seq,
+        harvestDate,
+        plants,
+        lights,
+        rowStatus,
+        laborCost,
+        costPerLb,
+        yieldPerLight,
+        yieldPerPlant,
+      };
+    });
+  }, [
+    records,
+    roomSequence,
+    roomOrder,
+    roomMap,
+    facilityConfig.rotationStartDate,
+    facilityConfig.rotationInterval,
+    laborRate,
+  ]);
+
+  // Sort: cycle asc, then seq asc
+  const sortedRows = useMemo(() => {
+    return [...enrichedRows].sort((a, b) => {
+      if (a.record.cycle_number !== b.record.cycle_number)
+        return a.record.cycle_number - b.record.cycle_number;
+      return a.seq - b.seq;
+    });
+  }, [enrichedRows]);
+
+  // ─── KPI ───
   const kpi = useMemo(() => {
-    const completed = records.filter(
-      (r) => computeStage(r.trim_start_date, r.trim_end_date) === "completed"
-    );
-    const totalYield = completed.reduce((sum, r) => sum + r.yield_lbs, 0);
-    const totalLaborCost = completed.reduce(
-      (sum, r) => sum + r.labor_units * laborRate,
+    const completed = enrichedRows.filter((r) => r.rowStatus === "completed");
+    const totalYield = completed.reduce(
+      (sum, r) => sum + r.record.yield_lbs,
       0
     );
+    const totalLaborCost = completed.reduce((sum, r) => sum + r.laborCost, 0);
     const avgCostPerLb = totalYield > 0 ? totalLaborCost / totalYield : 0;
-    return { totalYield, totalLaborCost, avgCostPerLb, count: completed.length };
-  }, [records, laborRate]);
+    return {
+      totalYield,
+      totalLaborCost,
+      avgCostPerLb,
+      count: completed.length,
+    };
+  }, [enrichedRows]);
+
+  const totalExpected =
+    facilityConfig.totalCycles * roomSequence.length;
+
+  // ─── CSV Export ───
+  function exportCSV() {
+    const headers = [
+      "Cycle",
+      "Seq",
+      "Room",
+      "Plants",
+      "Lights",
+      "Harvest Date",
+      "Location",
+      "Trim Start",
+      "Trim End",
+      "Labor",
+      "Yield (lbs)",
+      "Labor Cost",
+      "Cost/lb",
+      "Yield/Light",
+      "Yield/Plant",
+    ];
+    const csvRows = [headers.join(",")];
+    sortedRows.forEach((row) => {
+      const r = row.record;
+      const locationLabel = getLocationLabel(r, row.rowStatus);
+      csvRows.push(
+        [
+          r.cycle_number,
+          row.seq,
+          r.room_number,
+          row.plants,
+          row.lights,
+          row.harvestDate,
+          locationLabel,
+          r.trim_start_date || "",
+          r.trim_end_date || "",
+          r.labor_units || "",
+          r.yield_lbs || "",
+          row.laborCost || "",
+          row.costPerLb != null ? row.costPerLb.toFixed(2) : "",
+          row.yieldPerLight != null ? row.yieldPerLight.toFixed(2) : "",
+          row.yieldPerPlant != null ? row.yieldPerPlant.toFixed(4) : "",
+        ].join(",")
+      );
+    });
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "harvest_schedule.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─── Location helpers ───
+  function getLocationLabel(r: HarvestRecord, status: RowStatus): string {
+    if (status === "completed") return "Done";
+    if (r.dry_room_id === "TRIM") return "Trim Room";
+    if (r.dry_room_id === "A") return "Dry Room A";
+    if (r.dry_room_id === "B") return "Dry Room B";
+    if (r.dry_room_id === "C") return "Dry Room C";
+    return "Scheduled";
+  }
+
+  function LocationBadge({
+    record,
+    status,
+  }: {
+    record: HarvestRecord;
+    status: RowStatus;
+  }) {
+    if (status === "completed") {
+      return (
+        <span className="px-1.5 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded">
+          Done
+        </span>
+      );
+    }
+    if (record.dry_room_id === "TRIM") {
+      return (
+        <span className="px-1.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded">
+          Trim Room
+        </span>
+      );
+    }
+    if (
+      record.dry_room_id === "A" ||
+      record.dry_room_id === "B" ||
+      record.dry_room_id === "C"
+    ) {
+      return (
+        <span className="px-1.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-800 rounded">
+          Dry Room {record.dry_room_id}
+        </span>
+      );
+    }
+    return (
+      <span className="px-1.5 py-0.5 text-xs font-semibold bg-gray-100 text-gray-500 rounded">
+        Scheduled
+      </span>
+    );
+  }
+
+  // ─── Render ───
 
   if (loading) {
     return (
@@ -133,27 +358,26 @@ export function HarvestTable({ profile, laborRate, roomSequence }: HarvestTableP
     return (
       <div className="text-center py-12 text-gray-500">
         <p className="text-lg">No harvest records yet.</p>
-        <p className="text-sm mt-1">Records will appear here once created.</p>
+        <p className="text-sm mt-1">
+          Records will appear here once created.
+        </p>
       </div>
     );
   }
 
-  // Group by cycle
-  const cycles = records.reduce<Record<number, HarvestRecord[]>>((acc, r) => {
-    if (!acc[r.cycle_number]) acc[r.cycle_number] = [];
-    acc[r.cycle_number].push(r);
-    return acc;
-  }, {});
-
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* KPI Summary Cards */}
       {kpi.count > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white rounded-lg shadow p-4">
             <p className="text-sm text-gray-500">Total Yield</p>
             <p className="text-2xl font-bold text-gray-900">
-              {kpi.totalYield.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lbs
+              {kpi.totalYield.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              lbs
             </p>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
@@ -171,103 +395,154 @@ export function HarvestTable({ profile, laborRate, roomSequence }: HarvestTableP
         </div>
       )}
 
-      {Object.entries(cycles)
-        .sort(([a], [b]) => Number(a) - Number(b))
-        .map(([cycle, cycleRecords]) => (
-          <div key={cycle} className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="bg-green-700 px-4 py-2">
-              <h2 className="text-white font-semibold">Cycle {cycle}</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-left text-gray-600">
-                    <th className="px-4 py-2 font-medium">Room</th>
-                    <th className="px-4 py-2 font-medium">Stage</th>
-                    <th className="px-4 py-2 font-medium">Plants</th>
-                    <th className="px-4 py-2 font-medium">Lights</th>
-                    <th className="px-4 py-2 font-medium">Trim Start</th>
-                    <th className="px-4 py-2 font-medium">Trim End</th>
-                    <th className="px-4 py-2 font-medium">Labor Units</th>
-                    <th className="px-4 py-2 font-medium">Yield (lbs)</th>
-                    <th className="px-4 py-2 font-medium">Labor Cost</th>
-                    <th className="px-4 py-2 font-medium">Cost/lb</th>
-                    <th className="px-4 py-2 font-medium">Yield/Light</th>
-                    <th className="px-4 py-2 font-medium">Yield/Plant</th>
-                    <th className="px-4 py-2 font-medium">Dry Room</th>
-                    <th className="px-4 py-2 font-medium">Days Drying</th>
-                    <th className="px-4 py-2 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {cycleRecords
-                  .slice()
-                  .sort((a, b) => (roomOrder[a.room_number] ?? Infinity) - (roomOrder[b.room_number] ?? Infinity))
-                  .map((record) => {
-                    const stage = computeStage(
-                      record.trim_start_date,
-                      record.trim_end_date
-                    );
-                    const drying = daysDrying(record.trim_end_date);
-                    const isUpdated = recentlyUpdated.has(record.id);
-                    const room = roomMap[record.room_number];
-                    const plants = room?.plants ?? 0;
-                    const lights = room?.lights ?? 0;
-                    const laborCost = record.labor_units * laborRate;
-                    const costPerLb = record.yield_lbs > 0 ? laborCost / record.yield_lbs : 0;
-                    const yieldPerLight = lights > 0 ? record.yield_lbs / lights : 0;
-                    const yieldPerPlant = plants > 0 ? record.yield_lbs / plants : 0;
+      {/* Header: subtitle + CSV Export */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          Click any row to log harvest data. {kpi.count} of {totalExpected}{" "}
+          completed.
+        </p>
+        <button
+          onClick={exportCSV}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition-colors"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+            />
+          </svg>
+          Export CSV
+        </button>
+      </div>
 
-                    return (
-                      <tr
-                        key={record.id}
-                        className={`${ROW_BG[stage]} hover:brightness-95 transition-colors ${
-                          isUpdated ? "ring-2 ring-yellow-300 ring-inset" : ""
-                        }`}
-                      >
-                        <td className="px-4 py-2 font-medium">
-                          {record.room_number}
-                          {isUpdated && (
-                            <span className="ml-2 inline-block w-2 h-2 bg-yellow-400 rounded-full animate-pulse" title="Recently updated by another user" />
-                          )}
-                        </td>
-                        <td className="px-4 py-2">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STAGE_COLORS[stage]}`}
-                          >
-                            {stage}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2">{plants}</td>
-                        <td className="px-4 py-2">{lights}</td>
-                        <td className="px-4 py-2">{record.trim_start_date ?? "—"}</td>
-                        <td className="px-4 py-2">{record.trim_end_date ?? "—"}</td>
-                        <td className="px-4 py-2">{record.labor_units}</td>
-                        <td className="px-4 py-2">{record.yield_lbs}</td>
-                        <td className="px-4 py-2">{formatCurrency(laborCost)}</td>
-                        <td className="px-4 py-2">{record.yield_lbs > 0 ? formatCurrencyDecimal(costPerLb) : "—"}</td>
-                        <td className="px-4 py-2">{lights > 0 ? yieldPerLight.toFixed(2) : "—"}</td>
-                        <td className="px-4 py-2">{plants > 0 ? yieldPerPlant.toFixed(4) : "—"}</td>
-                        <td className="px-4 py-2">{record.dry_room_id ?? "—"}</td>
-                        <td className="px-4 py-2">
-                          {drying !== null ? `${drying}d` : "—"}
-                        </td>
-                        <td className="px-4 py-2">
-                          <Link
-                            href={`/dashboard/record/${record.id}`}
-                            className="text-green-600 hover:text-green-800 font-medium text-xs"
-                          >
-                            Edit
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ))}
+      {/* Flat Harvest Table */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                <th className="px-3 py-2">Cycle</th>
+                <th className="px-3 py-2">Seq</th>
+                <th className="px-3 py-2">Room</th>
+                <th className="px-3 py-2">Plants</th>
+                <th className="px-3 py-2">Lights</th>
+                <th className="px-3 py-2">Harvest Date</th>
+                <th className="px-3 py-2">Location</th>
+                <th className="px-3 py-2">Trim Start</th>
+                <th className="px-3 py-2">Trim End</th>
+                <th className="px-3 py-2">Labor</th>
+                <th className="px-3 py-2">Yield (lbs)</th>
+                <th className="px-3 py-2">Labor Cost</th>
+                <th className="px-3 py-2">Cost/lb</th>
+                <th className="px-3 py-2">Yield/Light</th>
+                <th className="px-3 py-2">Yield/Plant</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map((row) => {
+                const r = row.record;
+                const isUpdated = recentlyUpdated.has(r.id);
+
+                return (
+                  <tr
+                    key={r.id}
+                    onClick={() =>
+                      router.push(`/dashboard/record/${r.id}`)
+                    }
+                    className={`border-b border-gray-100 hover:brightness-95 transition-colors cursor-pointer ${ROW_BG[row.rowStatus]} ${
+                      isUpdated ? "ring-2 ring-yellow-300 ring-inset" : ""
+                    }`}
+                  >
+                    <td className="px-3 py-2 font-medium text-gray-900">
+                      {r.cycle_number}
+                      {isUpdated && (
+                        <span
+                          className="ml-2 inline-block w-2 h-2 bg-yellow-400 rounded-full animate-pulse"
+                          title="Recently updated"
+                        />
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">{row.seq}</td>
+                    <td className="px-3 py-2 font-semibold text-gray-900">
+                      {r.room_number}
+                    </td>
+                    <td className="px-3 py-2 text-gray-500">
+                      {row.plants}
+                    </td>
+                    <td className="px-3 py-2 text-gray-500">
+                      {row.lights}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {fmtDate(row.harvestDate)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <LocationBadge
+                        record={r}
+                        status={row.rowStatus}
+                      />
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {fmtDate(r.trim_start_date)}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {fmtDate(r.trim_end_date)}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {r.labor_units > 0 ? r.labor_units : "—"}
+                    </td>
+                    <td className="px-3 py-2 font-medium text-gray-900">
+                      {r.yield_lbs > 0 ? r.yield_lbs : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {row.laborCost > 0
+                        ? formatCurrency(row.laborCost)
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {row.costPerLb != null
+                        ? formatCurrencyDecimal(row.costPerLb)
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {row.yieldPerLight != null
+                        ? row.yieldPerLight.toFixed(2)
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-gray-700">
+                      {row.yieldPerPlant != null
+                        ? row.yieldPerPlant.toFixed(4)
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded bg-green-100 border border-green-300" />{" "}
+          Completed
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300" />{" "}
+          In Progress
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded bg-gray-100 border border-gray-300" />{" "}
+          Upcoming
+        </span>
+      </div>
     </div>
   );
 }
